@@ -1,0 +1,1 @@
+docker start weaviate > /dev/null 2>&1 || docker run -d -p 8080:8080 --env AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED='true' --env PERSISTENCE_DATA_PATH='./weaviate' --env ENABLE_MODULES='text2vec-transformers' --env DEFAULT_VECTORIZER_MODULE='text2vec-transformers' --name weaviate semitechnologies/weaviate:latest
