@@ -2,10 +2,11 @@ import ast
 import os
 import zipfile
 from datetime import datetime
+
 import pandas as pd
+import rfc3339
 import weaviate
 from weaviate.util import generate_uuid5
-import rfc3339
 
 
 def extract(folder_path: str):
@@ -64,18 +65,21 @@ def create_schema():
     print("Creating TedTalk schema...")
     client.schema.create(ted_talk_object_schema)
 
-def getInt(value):
+
+def to_int(value):
     if isinstance(value, str) and len(value) == 0:
         return 0
     else:
         return int(value)
 
-def getDate(date_str):
+
+def to_date(date_str: str):
     if len(date_str) == 0:
         return ""
     else:
         date = datetime.strptime(date_str, "%Y-%m-%d")
         return rfc3339.rfc3339(date)
+
 
 def build_talk_object(row):
     return {
@@ -85,14 +89,14 @@ def build_talk_object(row):
         "all_speakers": dict_values_to_list_of_strings(row.all_speakers),
         "occupations": dict_values_to_list_of_strings(row.occupations),
         "about_speakers": dict_values_to_list_of_strings(row.about_speakers),
-        "views": getInt(row.views),
-        "recorded_date": getDate(row.recorded_date),
-        "published_date": getDate(row.published_date),
+        "views": to_int(row.views),
+        "recorded_date": to_date(row.recorded_date),
+        "published_date": to_date(row.published_date),
         "event": row.event,
         "native_lang": row.native_lang,
         "available_lang": list_string_to_python_list(row.available_lang),
-        "comments": getInt(row.comments),
-        "duration": getInt(row.duration),
+        "comments": to_int(row.comments),
+        "duration": to_int(row.duration),
         "topics": list_string_to_python_list(row.topics),
         # related_talks is set manually to add talk references
         "url": row.url,
@@ -250,7 +254,9 @@ ted_talk_object_schema = {
 }
 
 if __name__ == '__main__':
-    if not os.path.exists("ted_talks_it.csv"):
+    ted_talks_csv_path = "ted_talks_it.csv"
+
+    if not os.path.exists(ted_talks_csv_path):
         print("Extracting zip file...")
         extract("ted_talks_it.zip")
 
@@ -271,7 +277,7 @@ if __name__ == '__main__':
     create_schema()
 
     print("Reading CSV...")
-    ted_talks_it_dataframe = pd.read_csv("ted_talks_it.csv").fillna(value="")
+    ted_talks_it_dataframe = pd.read_csv(ted_talks_csv_path).fillna(value="")
     ted_talks = []
     id_to_uuid = {}
 
@@ -300,7 +306,7 @@ if __name__ == '__main__':
             related_talks_ids = dict_keys_to_list_of_strings(row.related_talks)
 
             for talk_id in related_talks_ids:
-                talk_id = getInt(talk_id)
+                talk_id = to_int(talk_id)
                 if talk_id in id_to_uuid:
                     related_talk_uuid = id_to_uuid[talk_id]
                     batch.add_reference(
@@ -311,6 +317,6 @@ if __name__ == '__main__':
                         to_object_class_name="TedTalk",
                     )
                 else:
-                    print(f"Talk id {talk_id} not found in this dataset; Reference dropped")
+                    print(f"Talk id {talk_id} not found in this dataset. Reference dropped")
 
-    print("Data loading completed.")
+    print("Data loaded")
