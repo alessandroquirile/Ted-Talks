@@ -61,7 +61,7 @@ def database_already_configured():
     return class_already_exists
 
 
-def create_schema():
+def create_schema(ted_talk_object_schema):
     print("Creating TedTalk schema...")
     client.schema.create(ted_talk_object_schema)
 
@@ -274,7 +274,7 @@ if __name__ == '__main__':
         # client.schema.delete_class("TedTalk")
         exit()
 
-    create_schema()
+    create_schema(ted_talk_object_schema)
 
     print("Reading CSV...")
     ted_talks_it_dataframe = pd.read_csv(ted_talks_csv_path).fillna(value="")
@@ -290,7 +290,6 @@ if __name__ == '__main__':
         ted_talks.append(talk_object)
 
     with client.batch as batch:
-        # Create all objects
         print("Creating objects...")
         for talk in ted_talks:
             batch.add_data_object(
@@ -299,7 +298,6 @@ if __name__ == '__main__':
                 uuid=id_to_uuid[talk["talk_id"]]
             )
 
-        # Add references
         print("Creating object references...")
         for ix, row in ted_talks_it_dataframe.iterrows():
             this_talk_id = id_to_uuid[row.talk_id]
