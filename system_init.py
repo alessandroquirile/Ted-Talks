@@ -1,60 +1,23 @@
-import ast
 import os
-import zipfile
-from datetime import datetime
-
 import pandas as pd
-import rfc3339
 import weaviate
 from weaviate.util import generate_uuid5
+from transformers import Wav2Vec2FeatureExtractor, Wav2Vec2Model
+
+from audio_processing import extract_long_audio_embedding
+from util import *
 
 
-def extract(folder_path: str):
-    if os.path.exists(folder_path):
-        extract_directory = "./"
-        with zipfile.ZipFile(folder_path, 'r') as zip_ref:
-            zip_ref.extractall(extract_directory)
-        print(folder_path, "extracted")
-    else:
-        print(folder_path, "does not exist")
+ted_talks_csv_path = "dataset/ted_talks_it.csv"
+ted_talks_zip_path = "dataset/ted_talks_it.zip"
+ted_talks_audio_path = "dataset/AUDIO/"
 
+audio_model_name = "facebook/wav2vec2-large-xlsr-53"
 
-def dict_values_to_list_of_strings(dictionary_string):
-    if len(dictionary_string) == 0:
-        return []
+TedTalkClassName = "TedTalk"
+TedTalkAudioClassName = "TedTalkAudio"
 
-    dictionary = ast.literal_eval(dictionary_string)
-    result = []
-    for value in dictionary.values():
-        if isinstance(value, list):
-            result.extend(str(element) for element in value)
-        else:
-            result.append(str(value))
-    return result
-
-
-def dict_keys_to_list_of_strings(dictionary_string):
-    if len(dictionary_string) == 0:
-        return []
-
-    dictionary = ast.literal_eval(dictionary_string)
-    result = []
-    for key in dictionary.keys():
-        if isinstance(key, list):
-            result.extend(str(element) for element in key)
-        else:
-            result.append(str(key))
-    return result
-
-
-def list_string_to_python_list(list_string):
-    if len(list_string) == 0:
-        return []
-    else:
-        return ast.literal_eval(list_string)
-
-
-def database_already_configured():
+def is_database_already_configured():
     print("Getting the schema...")
     schema = client.schema.get()  # Get the schema to test connection
     class_already_exists = any(x for x in schema["classes"] if x["class"] == "TedTalk")
@@ -62,26 +25,12 @@ def database_already_configured():
 
 
 def create_schema(ted_talk_object_schema):
-    print("Creating TedTalk schema...")
+    print(f"Creating database schema...")
     client.schema.create(ted_talk_object_schema)
 
 
-def to_int(value):
-    if isinstance(value, str) and len(value) == 0:
-        return 0
-    else:
-        return int(value)
 
-
-def to_date(date_str: str):
-    if len(date_str) == 0:
-        return ""
-    else:
-        date = datetime.strptime(date_str, "%Y-%m-%d")
-        return rfc3339.rfc3339(date)
-
-
-def ask_similarity_metric():
+def ask_for_similarity_metric():
     # Prints the available metrics
     print("Meriche disponibili:")
     metrics = ["cosine", "dot", "l2", "hamming", "manhattan"]
@@ -90,7 +39,7 @@ def ask_similarity_metric():
 
     # Asks the user for a metric util a correct number is provided
     while True:
-        chosen_string = input("Quale metrica di similarità usare?")
+        chosen_string = input("> Quale metrica di similarità usare?")
         try:
             chosen_number = int(chosen_string)
             if 1 <= chosen_number <= len(metrics):
@@ -98,30 +47,8 @@ def ask_similarity_metric():
         except ValueError:
             pass
 
-        print(f"Inserire un numero da 1 a {len(metrics)}")
+        print(f"Inserire un numero da 1 a {len(metrics)}!")
 
-
-def print_progress_bar(iteration, total, prefix='', suffix='', decimals=1, length=100, fill='█', printEnd="\r"):
-    # Credit: https://stackoverflow.com/questions/3173320/text-progress-bar-in-terminal-with-block-characters
-    """
-    Call in a loop to create terminal progress bar
-    @params:
-        iteration   - Required  : current iteration (Int)
-        total       - Required  : total iterations (Int)
-        prefix      - Optional  : prefix string (Str)
-        suffix      - Optional  : suffix string (Str)
-        decimals    - Optional  : positive number of decimals in percent complete (Int)
-        length      - Optional  : character length of bar (Int)
-        fill        - Optional  : bar fill character (Str)
-        printEnd    - Optional  : end character (e.g. "\r", "\r\n") (Str)
-    """
-    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
-    filledLength = int(length * iteration // total)
-    bar = fill * filledLength + '-' * (length - filledLength)
-    print(f'\r{prefix} |{bar}| {percent}% {suffix}', end = printEnd)
-    # Print New Line on Complete
-    if iteration == total:
-        print()
 
 def build_talk_object(row):
     return {
@@ -150,7 +77,7 @@ def build_talk_object(row):
 ted_talk_object_schema = {
     "classes": [
         {
-            "class": "TedTalk",
+            "class": TedTalkClassName,
             "description": "Information about a Ted talk",
             "vectorizer": "text2vec-transformers",
             "properties": [
@@ -292,18 +219,162 @@ ted_talk_object_schema = {
 
             ],
             "vectorIndexConfig": {
-                "distance": "dot",
+                "distance": "cosine",
+            }
+        },
+        {
+            "class": TedTalkAudioClassName,
+            "description": "Stores the audio embedding for a Ted Talk",
+            "properties": [
+                {
+                    "name": "talk_entry",
+                    "description": "Cross reference to the related talk",
+                    "dataType": ["TedTalk"]
+                },
+                {
+                    "name": "original_file_name",
+                    "description": "The MP3 file this embedding was extracted from",
+                    "dataType": ["text"],
+                    "moduleConfig": {
+                        "text2vec-transformers": {
+                            "skip": True
+                        }
+                    }
+                },
+            ],
+            "vectorIndexConfig": {
+                "distance": "cosine",
             }
         }
     ]
 }
 
-if __name__ == '__main__':
-    ted_talks_csv_path = "ted_talks_it.csv"
 
+def check_dataset_files():
     if not os.path.exists(ted_talks_csv_path):
-        print("Extracting zip file...")
-        extract("ted_talks_it.zip")
+        if os.path.exists(ted_talks_zip_path):
+            print("Extracting zip file...")
+            extract("ted_talks_it.zip")
+        else:
+            print("Could not find dataset files. Quitting.")
+            exit(-1)
+
+    if not os.path.exists(ted_talks_audio_path):
+        print("Could not find AUDIO files. Quitting.")
+        exit(-1)
+
+
+def store_ted_talks(batch, ted_talks, id_to_uuid):
+    print("Storing objects...")
+    for index, talk in enumerate(ted_talks):
+        print_progress_bar(index, len(ted_talks))
+        batch.add_data_object(
+            data_object=talk,
+            class_name="TedTalk",
+            uuid=id_to_uuid[talk["talk_id"]]
+        )
+
+
+def store_ted_talks_relations(batch, ted_talks_it_dataframe, id_to_uuid):
+    print("Creating object references...")
+    for index, row in ted_talks_it_dataframe.iterrows():
+        print_progress_bar(index, len(ted_talks_it_dataframe))
+        this_talk_id = id_to_uuid[row.talk_id]
+        related_talks_ids = dict_keys_to_list_of_strings(row.related_talks)
+
+        for talk_id in related_talks_ids:
+            talk_id = to_int(talk_id)
+            if talk_id in id_to_uuid:
+                related_talk_uuid = id_to_uuid[talk_id]
+                batch.add_reference(
+                    from_object_uuid=this_talk_id,
+                    from_object_class_name=TedTalkClassName,
+                    from_property_name="related_talks",
+                    to_object_uuid=related_talk_uuid,
+                    to_object_class_name=TedTalkClassName,
+                )
+            else:
+                print(f"Talk id {talk_id} not found in this dataset. Reference dropped")
+
+
+def prepare_objects(ted_talks_it_dataframe, id_to_uuid, ted_talks):
+    print("Preparing data objects...")
+    for ix, row in ted_talks_it_dataframe.iterrows():
+        talk_object = build_talk_object(row)
+
+        talk_uuid = generate_uuid5(talk_object, TedTalkClassName)
+        id_to_uuid[talk_object["talk_id"]] = talk_uuid
+        ted_talks.append(talk_object)
+
+
+def store_talk_audio_embeddings(batch, ted_talks_it_dataframe, id_to_uuid, feature_extractor, audio_model, device):
+    print("Preparing and storing audio embeddings...")
+    for index, row in ted_talks_it_dataframe.iterrows():
+        file_name = f"{row.talk_id}.mp3"
+        audio_file_path = ted_talks_audio_path + file_name
+
+        # check if the mp3 file exists
+        if not os.path.exists(audio_file_path):
+            print(f"Audio file {audio_file_path} not found: ignoring this entry")
+            continue
+
+        # print progress so far
+        print_progress_bar(index, len(ted_talks_it_dataframe))
+
+        # if the mp3 file exists, then extract its features and add them to the database
+        file_features = extract_long_audio_embedding(audio_file_path, feature_extractor, audio_model, device=device)
+        talk_uuid = id_to_uuid[row.talk_id]
+
+        # construct Talk Audio Object
+        talk_audio_object = {
+            "original_file_name": file_name
+        }
+
+        # generate object's uuid
+        talk_audio_uuid = generate_uuid5(talk_audio_object, TedTalkAudioClassName)
+
+        # store object
+        batch.add_data_object(
+            data_object=talk_audio_object,
+            class_name=TedTalkAudioClassName,
+            uuid=talk_audio_uuid,
+            vector=file_features
+        )
+
+        # add a reference from this audio to the related TedTalk object
+        batch.add_reference(
+            from_object_uuid=talk_audio_uuid,
+            from_object_class_name=TedTalkAudioClassName,
+            from_property_name="talk_entry",
+            to_object_uuid=talk_uuid,
+            to_object_class_name=TedTalkClassName,
+        )
+
+
+def check_if_database_is_already_configured(client):
+    if is_database_already_configured():
+        print("Weaviate is already configured!")
+        print("Continuing will DELETE the existing TedTalk schema")
+        user_input = input("Type 'Yes' to continue, 'No' to quit")
+
+        user_wants_to_continue = (user_input == 'Yes')
+        if user_wants_to_continue:
+            # Delete the schema to reset the system:
+            print("Deleting the existing TedTalk schema")
+            client.schema.delete_class(TedTalkClassName)
+            client.schema.delete_class(TedTalkAudioClassName)
+        else:
+            print("Quitting with no changes.")
+            exit()
+
+
+if __name__ == '__main__':
+    device = 0  # or "cpu"
+    print(f"Loading model {audio_model_name}...")
+    feature_extractor = Wav2Vec2FeatureExtractor.from_pretrained(audio_model_name, device=device)
+    audio_model = Wav2Vec2Model.from_pretrained(audio_model_name).to(device)
+
+    check_dataset_files()
 
     print("Connecting to weaviate...")
     client = weaviate.Client("http://localhost:8080")
@@ -313,21 +384,9 @@ if __name__ == '__main__':
         num_workers=16,
     )
 
-    if database_already_configured():
-        print("Weaviate is already configured!")
-        print("Continuing will DELETE the existing TedTalk schema")
-        user_input = input("Type 'Yes' to continue, 'No' to quit")
+    check_if_database_is_already_configured(client)
 
-        user_wants_to_continue = (input == 'Yes')
-        if user_wants_to_continue:
-            # Delete the schema to reset the system:
-            print("Deleting the existing TedTalk schema")
-            client.schema.delete_class("TedTalk")
-        else:
-            print("Quitting with no changes.")
-            exit()
-
-    metric = ask_similarity_metric()
+    metric = ask_for_similarity_metric()
     for class_ in ted_talk_object_schema["classes"]:
         class_["vectorIndexConfig"]["distance"] = metric
 
@@ -336,45 +395,12 @@ if __name__ == '__main__':
     ted_talks = []
     id_to_uuid = {}
 
-    print("Creating schema...")
     create_schema(ted_talk_object_schema)
-
-    print("Preparing data objects...")
-    for ix, row in ted_talks_it_dataframe.iterrows():
-        talk_object = build_talk_object(row)
-
-        talk_uuid = generate_uuid5(talk_object, "TedTalk")
-        id_to_uuid[talk_object["talk_id"]] = talk_uuid
-        ted_talks.append(talk_object)
+    prepare_objects(ted_talks_it_dataframe, id_to_uuid, ted_talks)
 
     with client.batch as batch:
-        print("Creating objects...")
-        for index, talk in enumerate(ted_talks):
-            print_progress_bar(index, len(ted_talks))
-            batch.add_data_object(
-                data_object=talk,
-                class_name="TedTalk",
-                uuid=id_to_uuid[talk["talk_id"]]
-            )
+        store_ted_talks(batch, ted_talks, id_to_uuid)
+        store_ted_talks_relations(batch, ted_talks_it_dataframe, id_to_uuid)
+        store_talk_audio_embeddings(batch, ted_talks_it_dataframe, id_to_uuid, feature_extractor, audio_model, device)
 
-        print("Creating object references...")
-        for index, row in ted_talks_it_dataframe.iterrows():
-            print_progress_bar(index, len(ted_talks_it_dataframe))
-            this_talk_id = id_to_uuid[row.talk_id]
-            related_talks_ids = dict_keys_to_list_of_strings(row.related_talks)
-
-            for talk_id in related_talks_ids:
-                talk_id = to_int(talk_id)
-                if talk_id in id_to_uuid:
-                    related_talk_uuid = id_to_uuid[talk_id]
-                    batch.add_reference(
-                        from_object_uuid=this_talk_id,
-                        from_object_class_name="TedTalk",
-                        from_property_name="related_talks",
-                        to_object_uuid=related_talk_uuid,
-                        to_object_class_name="TedTalk",
-                    )
-                else:
-                    print(f"Talk id {talk_id} not found in this dataset. Reference dropped")
-
-    print("Data loaded")
+    print("Task completed.")

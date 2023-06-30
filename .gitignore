@@ -1,5 +1,6 @@
 qna-module/mdeberta-v3-base-squad2
 .idea
+dataset/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
