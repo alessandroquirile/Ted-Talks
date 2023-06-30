@@ -30,16 +30,19 @@ def extract_long_audio_embedding(file_path, feature_extractor, audio_model, devi
                                            return_tensors="pt")
 
         with torch.no_grad():
-            # get audio model features
-            model_output = audio_model(extractor_data.input_values.to(device))
+            try:
+                # get audio model features
+                model_output = audio_model(extractor_data.input_values.to(device))
 
-            # the audio model returns a 512 elements array for each tiny sample in the audio
-            # we are interested in having a single feature for the whole audio file
-            # the features for each tiny sample are combined by a simple mean
+                # the audio model returns a 512 elements array for each tiny sample in the audio
+                # we are interested in having a single feature for the whole audio file
+                # the features for each tiny sample are combined by a simple mean
 
-            chunk_features = torch.mean(model_output.extract_features, axis=1)
-            chunk_features = np.array(chunk_features.cpu())  # convert the 512 elements array to numpy
-            chunk_embeddings.append(chunk_features)
+                chunk_features = torch.mean(model_output.extract_features, axis=1)
+                chunk_features = np.array(chunk_features.cpu())  # convert the 512 elements array to numpy
+                chunk_embeddings.append(chunk_features)
+            except:
+                print("Chunk processing error")
 
     # combines the features of each 60 seconds long chunk by averaging the embeddings
     file_embedding = np.mean(chunk_embeddings, axis=0)
