@@ -81,6 +81,48 @@ def to_date(date_str: str):
         return rfc3339.rfc3339(date)
 
 
+def ask_similarity_metric():
+    # Prints the available metrics
+    print("Meriche disponibili:")
+    metrics = ["cosine", "dot", "l2", "hamming", "manhattan"]
+    for i, metric in enumerate(metrics, start=1):
+        print(f" {i}) {metric}")
+
+    # Asks the user for a metric util a correct number is provided
+    while True:
+        chosen_string = input("Quale metrica di similarità usare?")
+        try:
+            chosen_number = int(chosen_string)
+            if 1 <= chosen_number <= len(metrics):
+                return metrics[chosen_number - 1]
+        except ValueError:
+            pass
+
+        print(f"Inserire un numero da 1 a {len(metrics)}")
+
+
+def print_progress_bar(iteration, total, prefix='', suffix='', decimals=1, length=100, fill='█', printEnd="\r"):
+    # Credit: https://stackoverflow.com/questions/3173320/text-progress-bar-in-terminal-with-block-characters
+    """
+    Call in a loop to create terminal progress bar
+    @params:
+        iteration   - Required  : current iteration (Int)
+        total       - Required  : total iterations (Int)
+        prefix      - Optional  : prefix string (Str)
+        suffix      - Optional  : suffix string (Str)
+        decimals    - Optional  : positive number of decimals in percent complete (Int)
+        length      - Optional  : character length of bar (Int)
+        fill        - Optional  : bar fill character (Str)
+        printEnd    - Optional  : end character (e.g. "\r", "\r\n") (Str)
+    """
+    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
+    filledLength = int(length * iteration // total)
+    bar = fill * filledLength + '-' * (length - filledLength)
+    print(f'\r{prefix} |{bar}| {percent}% {suffix}', end = printEnd)
+    # Print New Line on Complete
+    if iteration == total:
+        print()
+
 def build_talk_object(row):
     return {
         "talk_id": row.talk_id,
@@ -248,7 +290,10 @@ ted_talk_object_schema = {
                     "dataType": ["text"]
                 }
 
-            ]
+            ],
+            "vectorIndexConfig": {
+                "distance": "dot",
+            }
         }
     ]
 }
@@ -269,17 +314,30 @@ if __name__ == '__main__':
     )
 
     if database_already_configured():
-        print("Weaviate is already configured. Quitting...")
-        # Delete the schema to reset the system:
-        # client.schema.delete_class("TedTalk")
-        exit()
+        print("Weaviate is already configured!")
+        print("Continuing will DELETE the existing TedTalk schema")
+        user_input = input("Type 'Yes' to continue, 'No' to quit")
 
-    create_schema(ted_talk_object_schema)
+        user_wants_to_continue = (input == 'Yes')
+        if user_wants_to_continue:
+            # Delete the schema to reset the system:
+            print("Deleting the existing TedTalk schema")
+            client.schema.delete_class("TedTalk")
+        else:
+            print("Quitting with no changes.")
+            exit()
+
+    metric = ask_similarity_metric()
+    for class_ in ted_talk_object_schema["classes"]:
+        class_["vectorIndexConfig"]["distance"] = metric
 
     print("Reading CSV...")
     ted_talks_it_dataframe = pd.read_csv(ted_talks_csv_path).fillna(value="")
     ted_talks = []
     id_to_uuid = {}
+
+    print("Creating schema...")
+    create_schema(ted_talk_object_schema)
 
     print("Preparing data objects...")
     for ix, row in ted_talks_it_dataframe.iterrows():
@@ -291,7 +349,8 @@ if __name__ == '__main__':
 
     with client.batch as batch:
         print("Creating objects...")
-        for talk in ted_talks:
+        for index, talk in enumerate(ted_talks):
+            print_progress_bar(index, len(ted_talks))
             batch.add_data_object(
                 data_object=talk,
                 class_name="TedTalk",
@@ -299,7 +358,8 @@ if __name__ == '__main__':
             )
 
         print("Creating object references...")
-        for ix, row in ted_talks_it_dataframe.iterrows():
+        for index, row in ted_talks_it_dataframe.iterrows():
+            print_progress_bar(index, len(ted_talks_it_dataframe))
             this_talk_id = id_to_uuid[row.talk_id]
             related_talks_ids = dict_keys_to_list_of_strings(row.related_talks)
 
