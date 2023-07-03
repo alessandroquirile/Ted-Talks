@@ -12,7 +12,8 @@ ted_talks_csv_path = "dataset/ted_talks_it.csv"
 ted_talks_zip_path = "dataset/ted_talks_it.zip"
 ted_talks_audio_path = "dataset/AUDIO/"
 
-audio_model_name = "facebook/wav2vec2-large-xlsr-53"
+#audio_model_name = "facebook/wav2vec2-large-xlsr-53"
+audio_model_name = "facebook/wav2vec2-base-100k-voxpopuli"
 
 TedTalkClassName = "TedTalk"
 TedTalkAudioClassName = "TedTalkAudio"
