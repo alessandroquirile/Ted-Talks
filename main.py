@@ -91,7 +91,7 @@ def print_result(talk):
 
 def split_large_text_in_segments(long_text, tokenizer):
     # https://discuss.huggingface.co/t/summarization-on-long-documents/920/24
-    sentences = nltk.tokenize.sent_tokenize(long_text)
+    sentences = nltk.tokenize.sent_tokenize(long_text, language="italian")
     length = 0
     chunk = ""
     chunks = []
