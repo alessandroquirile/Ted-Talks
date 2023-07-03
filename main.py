@@ -6,13 +6,14 @@ import rfc3339
 from transformers import pipeline, AutoTokenizer, AutoModelForSeq2SeqLM
 import nltk
 from nltk.tokenize import sent_tokenize
+from util import ask_user_choice
 
 summarizer_model_name = "facebook/bart-large-cnn"
 summarizer = None
 
 
+@DeprecationWarning
 def search(client, text, limit=3):
-
     # Which class to look for on the database
     class_name = "TedTalk"
 
@@ -37,6 +38,33 @@ def search(client, text, limit=3):
     ted_talks = query_result["data"]["Get"]["TedTalk"]  # navigate the response json and only return the talks
     return ted_talks
 
+
+def build_query(client: weaviate.Client, limit=3, additional_parameters=None):
+    # Which class to look for on the database
+    class_name = "TedTalk"
+
+    # Which parameters we want in output
+    parameters = ["talk_id", "title", "speaker_1", "all_speakers", "occupations", "about_speakers", "views",
+                  "recorded_date", "published_date", "event", "native_lang", "available_lang", "comments",
+                  "duration", "topics", "url", "description", "transcript"]  # "related_talks"
+
+    if additional_parameters is None:
+        additional_parameters = ["id", "certainty", "distance"]
+
+    # Performs the query
+    query = client.query\
+        .get(class_name, parameters)\
+        .with_limit(limit)\
+        .with_additional(additional_parameters)
+
+    return query
+
+
+def execute_query(query):
+    query = query.do()
+
+    ted_talks = query["data"]["Get"]["TedTalk"]  # navigate the response json and only return the talks
+    return ted_talks
 
 def prettify_duration(seconds: int) -> str:
     """
@@ -112,6 +140,89 @@ def summarize(summarizer, long_text):
     return summary
 
 
+def semantic_search(client):
+    text = input("> Cosa cerchi? ")
+    query = build_query(client, limit=3)
+    query = query.with_near_text({
+        "concepts": [text]  # Search using a near_text technique
+    })
+    results = execute_query(query)
+    print("Ecco cosa ho trovato:")
+    for talk in results:
+        print_result(talk)
+
+
+def hybrid_search(client):
+    text = input("> Cosa cerchi? ")
+    query = build_query(client, limit=3)
+    query = query.with_hybrid(query=text, properties=["transcript"]) #perform hybrid search on transcript only
+    results = execute_query(query)
+    print("Ecco cosa ho trovato:")
+    for talk in results:
+        print_result(talk)
+
+
+def print_qna_result_text(transcript: str, answer: str, answer_start: int, answer_end: int) -> None:
+    UNDERLINE = '\033[4m'
+    ENDCOLOR = '\033[0m'
+
+    print_start = 0
+    print_end = len(transcript)
+
+    if answer_start > 100:
+        print_start = answer_start - 100
+    if len(transcript) > answer_end + 100:
+        print_end = answer_end + 100
+
+    text_before = transcript[print_start:answer_start]
+    text_after = transcript[answer_end:print_end]
+
+    print(text_before, end="")
+    print(f"{UNDERLINE}{answer}{ENDCOLOR}", end="")
+    print(text_after)
+
+
+def print_qna_result(query_result):
+    answer_dict = query_result["_additional"]["answer"]
+    if answer_dict["hasAnswer"]:
+        answer_text = answer_dict['result']
+        certainty = answer_dict['certainty']
+        startPosition = answer_dict['startPosition']
+        endPosition = answer_dict['endPosition']
+
+        talk_id = query_result['talk_id']
+        talk_title = query_result['title']
+        talk_transcript = query_result['transcript']
+
+        print(f"# Risposta: {answer_text}")
+        print(f"# Certezza: {certainty}")
+        print(f"# Estratto dal talk {talk_id}: '{talk_title}':")
+        # print_qna_result_text(talk_transcript, answer_text, startPosition, endPosition)
+        print("")
+
+
+def question_and_answer(client):
+    text = input("> Fai una domanda: ")
+
+    additional_parameters = "answer {hasAnswer certainty property result startPosition endPosition}"
+    ask = {
+        "question": text,
+        "properties": ["transcript"]
+    }
+
+    query = build_query(client, limit=3, additional_parameters=additional_parameters)
+    query = query.with_ask(ask)  # perform hybrid search on transcript only
+    results = execute_query(query)
+
+    answer_found = any([x for x in results if x["_additional"]["answer"]["hasAnswer"]])
+    if answer_found:
+        print("Ecco cosa ho trovato:")
+        for result in results:
+            print_qna_result(result)
+    else:
+        print("Non ho trovato risposte")
+
+
 if __name__ == '__main__':
     print("Initializing summarizer model...")
     nltk.download('punkt')
@@ -122,14 +233,18 @@ if __name__ == '__main__':
 
     while True:
         # Asks user to provide a search prompt. If empty, the application terminates
-        text = input("> Cosa cerchi? ")
-        if len(text) == 0:
-            break
+        opzioni = ["Ricerca semantica", "Ricerca ibrida testuale/semantica", "Question & Answer", "Ricerca audio", "Quit"]
+        index, scelta = ask_user_choice("Cosa vuoi fare?", opzioni)
 
-        # Search the database. Limits the maximum number of returner talks
-        query_result = search(client, text, limit=3)
+        if index == 0:
+            semantic_search(client)
+        elif index == 1:
+            hybrid_search(client)
+        elif index == 2:
+            question_and_answer(client)
+        elif index == 3:
+            print("TODO")  # TODO
+            # Ricerca audio
+        elif index == 4:
+            exit()
 
-        # Prints the talks
-        print("Ecco cosa ho trovato:")
-        for talk in query_result:
-            print_result(talk)
