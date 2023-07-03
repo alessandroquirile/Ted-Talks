@@ -104,3 +104,13 @@ def ask_user_choice(prompt_text: str, choices: list):
             pass
 
         print(f"Inserire un numero da 1 a {len(choices)}!")
+
+
+def prettify_duration(seconds: int) -> str:
+    """
+        Turns an integer (number of seconds) to its duration as a prettified string,
+        120 -> "2:00"
+    :param seconds: timespan to prettify
+    :return: timespan in a more human-readable string
+    """
+    return str(datetime.timedelta(seconds=seconds))

@@ -1,42 +1,12 @@
-import datetime
-
-import torch
 import weaviate
-import rfc3339
-from transformers import pipeline, AutoTokenizer, AutoModelForSeq2SeqLM
 import nltk
-from nltk.tokenize import sent_tokenize
-from util import ask_user_choice
+from transformers import pipeline
+
+from util import ask_user_choice, prettify_duration
+
 
 summarizer_model_name = "facebook/bart-large-cnn"
 summarizer = None
-
-
-@DeprecationWarning
-def search(client, text, limit=3):
-    # Which class to look for on the database
-    class_name = "TedTalk"
-
-    # Which parameters we want in output
-    parameters = ["talk_id", "title", "speaker_1", "all_speakers", "occupations", "about_speakers", "views",
-                  "recorded_date", "published_date", "event", "native_lang", "available_lang", "comments",
-                  "duration", "topics", "url", "description", "transcript"] # "related_talks"
-
-    # Additional parameters set by the dbms
-    additional_parameters = ["id", "certainty", "distance"]
-
-    # Performs the query
-    query_result = client.query\
-        .get(class_name, parameters)\
-        .with_near_text({
-            "concepts": [text] # Serach using a near_text technique
-        })\
-        .with_limit(limit)\
-        .with_additional(additional_parameters)\
-        .do()
-
-    ted_talks = query_result["data"]["Get"]["TedTalk"]  # navigate the response json and only return the talks
-    return ted_talks
 
 
 def build_query(client: weaviate.Client, limit=3, additional_parameters=None):
@@ -65,15 +35,6 @@ def execute_query(query):
 
     ted_talks = query["data"]["Get"]["TedTalk"]  # navigate the response json and only return the talks
     return ted_talks
-
-def prettify_duration(seconds: int) -> str:
-    """
-        Turns an integer (number of seconds) to its duration as a prettified string,
-        120 -> "2:00"
-    :param seconds: timespan to prettify
-    :return: timespan in a more human-readable string
-    """
-    return str(datetime.timedelta(seconds=seconds))
 
 
 def print_result(talk):
