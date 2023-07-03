@@ -86,3 +86,21 @@ def print_progress_bar(iteration, total, prefix='', suffix='', decimals=1, lengt
     # Print New Line on Complete
     if iteration == total:
         print()
+
+
+def ask_user_choice(prompt_text: str, choices: list):
+    print(prompt_text)
+    for i, text in enumerate(choices, start=1):
+        print(f" {i}) {text}")
+
+    # Asks the user for a metric util a correct number is provided
+    while True:
+        chosen_string = input("> Cosa scegli? ")
+        try:
+            chosen_number = int(chosen_string)
+            if 1 <= chosen_number <= len(choices):
+                return chosen_number - 1, choices[chosen_number - 1]
+        except ValueError:
+            pass
+
+        print(f"Inserire un numero da 1 a {len(choices)}!")

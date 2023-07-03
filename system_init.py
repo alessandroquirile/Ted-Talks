@@ -29,25 +29,11 @@ def create_schema(ted_talk_object_schema):
     client.schema.create(ted_talk_object_schema)
 
 
-
 def ask_for_similarity_metric():
     # Prints the available metrics
-    print("Meriche disponibili:")
     metrics = ["cosine", "dot", "l2", "hamming", "manhattan"]
-    for i, metric in enumerate(metrics, start=1):
-        print(f" {i}) {metric}")
-
-    # Asks the user for a metric util a correct number is provided
-    while True:
-        chosen_string = input("> Quale metrica di similarità usare?")
-        try:
-            chosen_number = int(chosen_string)
-            if 1 <= chosen_number <= len(metrics):
-                return metrics[chosen_number - 1]
-        except ValueError:
-            pass
-
-        print(f"Inserire un numero da 1 a {len(metrics)}!")
+    index, chosen_value = ask_user_choice("Meriche disponibili:", metrics)
+    return chosen_value
 
 
 def build_talk_object(row):
