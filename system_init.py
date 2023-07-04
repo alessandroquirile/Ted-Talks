@@ -4,7 +4,7 @@ import weaviate
 from weaviate.util import generate_uuid5
 from transformers import Wav2Vec2FeatureExtractor, Wav2Vec2Model
 
-from audio_feature_extractor import extract_long_audio_embedding, AudioFeatureExtractor
+from audio_feature_extractor import AudioFeatureExtractor
 from util import *
 
 

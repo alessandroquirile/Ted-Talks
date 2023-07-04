@@ -54,7 +54,6 @@ def print_result(talk):
     print(summarize(summarizer, talk['transcript']))
 
 
-
 def split_large_text_in_segments(long_text, tokenizer):
     # https://discuss.huggingface.co/t/summarization-on-long-documents/920/24
     sentences = nltk.tokenize.sent_tokenize(long_text, language="italian")
@@ -168,16 +167,16 @@ def print_qna_result(query_result):
 
 
 def question_and_answer(client):
-    text = input("> Fai una domanda: ")
+    user_provided_question = input("> Fai una domanda: ")
 
     additional_parameters = "answer {hasAnswer certainty property result startPosition endPosition}"
-    ask = {
-        "question": text,
+    ask_details = {
+        "question": user_provided_question,
         "properties": ["transcript"]
     }
 
     query = build_query(client, limit=3, additional_parameters=additional_parameters)
-    query = query.with_ask(ask)  # perform hybrid search on transcript only
+    query = query.with_ask(ask_details)  # perform hybrid search on transcript only
     results = execute_query(query)
 
     answer_found = any([x for x in results if x["_additional"]["answer"]["hasAnswer"]])
@@ -189,8 +188,7 @@ def question_and_answer(client):
         print("Non ho trovato risposte")
 
 
-def audio_search(client):
-    device = 0  # "cpu"
+def audio_search(client, device):
     global audio_feature_extractor
 
     if audio_feature_extractor is None:
@@ -218,6 +216,7 @@ def audio_search(client):
         .with_limit(3)
         .do()
     )
+
     ted_talk_audios = response["data"]["Get"]["TedTalkAudio"]
     for ted_talk_audio in ted_talk_audios:
         talk_entry = ted_talk_audio["talk_entry"][0]
@@ -234,9 +233,8 @@ if __name__ == '__main__':
     client = weaviate.Client("http://localhost:8080")
 
     while True:
-        # Asks user to provide a search prompt. If empty, the application terminates
-        opzioni = ["Ricerca semantica", "Ricerca ibrida testuale/semantica", "Question & Answer", "Ricerca audio", "Quit"]
-        index, scelta = ask_user_choice("Cosa vuoi fare?", opzioni)
+        choices = ["Ricerca semantica", "Ricerca ibrida testuale/semantica", "Question & Answer", "Ricerca audio", "Quit"]
+        index, _ = ask_user_choice("Cosa vuoi fare?", choices)
 
         if index == 0:
             semantic_search(client)
@@ -245,8 +243,7 @@ if __name__ == '__main__':
         elif index == 2:
             question_and_answer(client)
         elif index == 3:
-            audio_search(client)
-            # Ricerca audio
+            audio_search(client, device)
         elif index == 4:
             exit()
 
