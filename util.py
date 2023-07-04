@@ -1,7 +1,7 @@
 import ast
 import os
 import zipfile
-from datetime import datetime
+import datetime
 import rfc3339
 
 
