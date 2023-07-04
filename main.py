@@ -1,22 +1,26 @@
+import os.path
+
 import weaviate
 import nltk
 from transformers import pipeline
 
+from audio_feature_extractor import AudioFeatureExtractor
 from util import ask_user_choice, prettify_duration
 
 
 summarizer_model_name = "facebook/bart-large-cnn"
+audio_model_name = "facebook/wav2vec2-base-100k-voxpopuli"
 summarizer = None
+audio_feature_extractor = None
 
+# Which parameters we want in output
+parameters = ["talk_id", "title", "speaker_1", "all_speakers", "occupations", "about_speakers", "views",
+              "recorded_date", "published_date", "event", "native_lang", "available_lang", "comments",
+              "duration", "topics", "url", "description", "transcript"]  # "related_talks"
 
 def build_query(client: weaviate.Client, limit=3, additional_parameters=None):
     # Which class to look for on the database
     class_name = "TedTalk"
-
-    # Which parameters we want in output
-    parameters = ["talk_id", "title", "speaker_1", "all_speakers", "occupations", "about_speakers", "views",
-                  "recorded_date", "published_date", "event", "native_lang", "available_lang", "comments",
-                  "duration", "topics", "url", "description", "transcript"]  # "related_talks"
 
     if additional_parameters is None:
         additional_parameters = ["id", "certainty", "distance"]
@@ -46,8 +50,9 @@ def print_result(talk):
     print(f"Duration: {prettify_duration(talk['duration'])}")
     print(f"Description: {talk['description']}")
     print(f"URL: {talk['url']}")
-    print(f"TLDR: {summarize(summarizer, talk['transcript'])}")
-    pass
+    print("TLDR: ", end="")
+    print(summarize(summarizer, talk['transcript']))
+
 
 
 def split_large_text_in_segments(long_text, tokenizer):
@@ -157,7 +162,7 @@ def print_qna_result(query_result):
 
         print(f"# Risposta: {answer_text}")
         print(f"# Certezza: {certainty}")
-        print(f"# Estratto dal talk {talk_id}: '{talk_title}':")
+        print(f"# Estratto dal talk {talk_id}: '{talk_title}'")
         # print_qna_result_text(talk_transcript, answer_text, startPosition, endPosition)
         print("")
 
@@ -184,10 +189,46 @@ def question_and_answer(client):
         print("Non ho trovato risposte")
 
 
+def audio_search(client):
+    device = 0  # "cpu"
+    global audio_feature_extractor
+
+    if audio_feature_extractor is None:
+        print("Initializing audio model...")
+        audio_feature_extractor = AudioFeatureExtractor(audio_model_name, device)
+
+    audio_file_path = input("> Audio file path: ")
+    if not os.path.exists(audio_file_path):
+        print(f"Could not find file {audio_file_path}")
+        return
+
+    print("Extracting audio features...")
+    audio_features = audio_feature_extractor.extract_long_audio_embedding(audio_file_path)
+
+    print("Querying the database...")
+    parameters_string = ' '.join(parameters)
+    response = (
+        client.query
+        .get("TedTalkAudio", [
+            "talk_entry { ... on TedTalk { " + parameters_string + " } }"
+        ])
+        .with_near_vector({
+            "vector": audio_features
+        })
+        .with_limit(3)
+        .do()
+    )
+    ted_talk_audios = response["data"]["Get"]["TedTalkAudio"]
+    for ted_talk_audio in ted_talk_audios:
+        talk_entry = ted_talk_audio["talk_entry"][0]
+        print_result(talk_entry)
+
+
 if __name__ == '__main__':
+    device = 0  # "cpu"
     print("Initializing summarizer model...")
     nltk.download('punkt')
-    summarizer = pipeline("summarization", model=summarizer_model_name, device=0)
+    summarizer = pipeline("summarization", model=summarizer_model_name, device=device)
 
     print("Connecting to weaviate...")
     client = weaviate.Client("http://localhost:8080")
@@ -204,7 +245,7 @@ if __name__ == '__main__':
         elif index == 2:
             question_and_answer(client)
         elif index == 3:
-            print("TODO")  # TODO
+            audio_search(client)
             # Ricerca audio
         elif index == 4:
             exit()

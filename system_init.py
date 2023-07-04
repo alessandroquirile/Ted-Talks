@@ -4,7 +4,7 @@ import weaviate
 from weaviate.util import generate_uuid5
 from transformers import Wav2Vec2FeatureExtractor, Wav2Vec2Model
 
-from audio_processing import extract_long_audio_embedding
+from audio_feature_extractor import extract_long_audio_embedding, AudioFeatureExtractor
 from util import *
 
 
@@ -294,7 +294,7 @@ def prepare_objects(ted_talks_it_dataframe, id_to_uuid, ted_talks):
         ted_talks.append(talk_object)
 
 
-def store_talk_audio_embeddings(batch, ted_talks_it_dataframe, id_to_uuid, feature_extractor, audio_model, device):
+def store_talk_audio_embeddings(batch, ted_talks_it_dataframe, id_to_uuid, audio_feature_extractor):
     print("Preparing and storing audio embeddings...")
     for index, row in ted_talks_it_dataframe.iterrows():
         file_name = f"{row.talk_id}.mp3"
@@ -309,7 +309,7 @@ def store_talk_audio_embeddings(batch, ted_talks_it_dataframe, id_to_uuid, featu
         print_progress_bar(index, len(ted_talks_it_dataframe))
 
         # if the mp3 file exists, then extract its features and add them to the database
-        file_features = extract_long_audio_embedding(audio_file_path, feature_extractor, audio_model, device=device)
+        file_features = audio_feature_extractor.extract_long_audio_embedding(audio_file_path)
         talk_uuid = id_to_uuid[row.talk_id]
 
         # construct Talk Audio Object
@@ -358,8 +358,7 @@ def check_if_database_is_already_configured(client):
 if __name__ == '__main__':
     device = 0  # or "cpu"
     print(f"Loading model {audio_model_name}...")
-    feature_extractor = Wav2Vec2FeatureExtractor.from_pretrained(audio_model_name, device=device)
-    audio_model = Wav2Vec2Model.from_pretrained(audio_model_name).to(device)
+    audio_feature_extractor = AudioFeatureExtractor(audio_model_name, device)
 
     check_dataset_files()
 
@@ -388,6 +387,6 @@ if __name__ == '__main__':
     with client.batch as batch:
         store_ted_talks(batch, ted_talks, id_to_uuid)
         store_ted_talks_relations(batch, ted_talks_it_dataframe, id_to_uuid)
-        store_talk_audio_embeddings(batch, ted_talks_it_dataframe, id_to_uuid, feature_extractor, audio_model, device)
+        store_talk_audio_embeddings(batch, ted_talks_it_dataframe, id_to_uuid, audio_feature_extractor)
 
     print("Task completed.")
