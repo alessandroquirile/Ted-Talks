@@ -43,15 +43,17 @@ def execute_query(query):
 
 def print_result(talk):
     print("============================================")
-    print(f"Talk id: {talk['talk_id']}")
-    print(f"Title: {talk['title']}")
-    print(f"Speaker 1: {talk['speaker_1']} @ {talk['event']}")
-    print(f"Native language: {talk['native_lang']}")
-    print(f"Duration: {prettify_duration(talk['duration'])}")
-    print(f"Description: {talk['description']}")
-    print(f"URL: {talk['url']}")
-    print("TLDR: ", end="")
-    print(summarize(summarizer, talk['transcript']))
+    print(f" # Talk id: {talk['talk_id']}")
+    print(f" # Title: {talk['title']}")
+    print(f" # Speaker 1: {talk['speaker_1']} @ {talk['event']}")
+    print(f" # Native language: {talk['native_lang']}")
+    print(f" # Duration: {prettify_duration(talk['duration'])}")
+    print(f" # Description: {talk['description']}")
+    print(f" # URL: {talk['url']}")
+    print(" # TLDR: ", end="", flush=True)
+    summary = summarize(summarizer, talk['transcript'])
+    print(summary)
+    print("")
 
 
 def split_large_text_in_segments(long_text, tokenizer):
