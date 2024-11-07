@@ -11,9 +11,9 @@ tqdm==4.65.0
 validators==0.20.0
 weaviate-client==3.21.0
 rfc3339~=6.2
-pandas~=2.0.2
+pandas
 transformers~=4.29.1
 torch~=2.1.0
 librosa~=0.10.0.post2
 nltk~=3.8.1
-numpy~=1.22.4
+numpy<2
