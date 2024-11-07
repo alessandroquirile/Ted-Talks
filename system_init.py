@@ -33,7 +33,7 @@ def create_schema(ted_talk_object_schema):
 def ask_for_similarity_metric():
     # Prints the available metrics
     metrics = ["cosine", "dot", "l2", "hamming", "manhattan"]
-    index, chosen_value = ask_user_choice("Meriche disponibili:", metrics)
+    index, chosen_value = ask_user_choice("Metriche disponibili:", metrics)
     return chosen_value
 
 
@@ -344,8 +344,7 @@ def check_if_database_is_already_configured(client):
         print("Continuing will DELETE the existing TedTalk schema")
         user_input = input("Type 'Yes' to continue, 'No' to quit")
 
-        user_wants_to_continue = (user_input == 'Yes')
-        if user_wants_to_continue:
+        if user_input == 'Yes':
             # Delete the schema to reset the system:
             print("Deleting the existing TedTalk schema")
             client.schema.delete_class(TedTalkClassName)
@@ -356,7 +355,7 @@ def check_if_database_is_already_configured(client):
 
 
 if __name__ == '__main__':
-    device = 0  # or "cpu"
+    device = "cpu"
     print(f"Loading model {audio_model_name}...")
     audio_feature_extractor = AudioFeatureExtractor(audio_model_name, device)
 

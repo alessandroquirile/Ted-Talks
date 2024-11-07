@@ -1,7 +1,7 @@
+from datetime import datetime, timedelta
 import ast
 import os
 import zipfile
-import datetime
 import rfc3339
 
 
@@ -66,7 +66,6 @@ def to_date(date_str: str):
 
 
 def print_progress_bar(iteration, total, prefix='', suffix='', decimals=1, length=100, fill='█', printEnd="\r"):
-    # Credit: https://stackoverflow.com/questions/3173320/text-progress-bar-in-terminal-with-block-characters
     """
     Call in a loop to create terminal progress bar
     @params:
@@ -83,7 +82,6 @@ def print_progress_bar(iteration, total, prefix='', suffix='', decimals=1, lengt
     filledLength = int(length * iteration // total)
     bar = fill * filledLength + '-' * (length - filledLength)
     print(f'\r{prefix} |{bar}| {percent}% {suffix}', end=printEnd)
-    # Print New Line on Complete
     if iteration == total:
         print()
 
@@ -93,7 +91,6 @@ def ask_user_choice(prompt_text: str, choices: list):
     for i, text in enumerate(choices, start=1):
         print(f" {i}) {text}")
 
-    # Asks the user for a metric util a correct number is provided
     while True:
         chosen_string = input("> Cosa scegli? ")
         try:
@@ -113,4 +110,4 @@ def prettify_duration(seconds: int) -> str:
     :param seconds: timespan to prettify
     :return: timespan in a more human-readable string
     """
-    return str(datetime.timedelta(seconds=seconds))
+    return str(timedelta(seconds=seconds))

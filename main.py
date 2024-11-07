@@ -3,6 +3,8 @@ import os.path
 import weaviate
 import nltk
 from transformers import pipeline
+import ssl
+
 
 from audio_feature_extractor import AudioFeatureExtractor
 from util import ask_user_choice, prettify_duration
@@ -181,13 +183,19 @@ def question_and_answer(client):
     query = query.with_ask(ask_details)  # perform hybrid search on transcript only
     results = execute_query(query)
 
-    answer_found = any([x for x in results if x["_additional"]["answer"]["hasAnswer"]])
-    if answer_found:
-        print("Ecco cosa ho trovato:")
-        for result in results:
-            print_qna_result(result)
+    if results:
+        answer_found = any([
+            x for x in results
+            if x.get("_additional") and x["_additional"].get("answer") and x["_additional"]["answer"].get("hasAnswer")
+        ])
+        if answer_found:
+            print("Ecco cosa ho trovato:")
+            for result in results:
+                print_qna_result(result)
+        else:
+            print("Non ho trovato risposte")
     else:
-        print("Non ho trovato risposte")
+        print("Risultati non disponibili")
 
 
 def audio_search(client, device):
@@ -226,9 +234,17 @@ def audio_search(client, device):
 
 
 if __name__ == '__main__':
-    device = 0  # "cpu"
+    device = "cpu"
     print("Initializing summarizer model...")
-    nltk.download('punkt')
+    try:
+        _create_unverified_https_context = ssl._create_unverified_context
+    except AttributeError:
+        pass
+    else:
+        ssl._create_default_https_context = _create_unverified_https_context
+
+    nltk.download("punkt")
+
     summarizer = pipeline("summarization", model=summarizer_model_name, device=device)
 
     print("Connecting to weaviate...")
